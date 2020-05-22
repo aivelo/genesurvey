@@ -1,0 +1,206 @@
+#necessary packages
+
+deps = c("car","mirt","likert","dplyr","forcats","dotwhisker","tidyr","tidyverse", "rfigshare");
+
+for (dep in deps){
+  if (dep %in% installed.packages()[,"Package"] == FALSE){
+    install.packages(as.character(dep), quiet=TRUE);
+  }
+  library(dep, verbose=FALSE, character.only=TRUE)
+}
+
+#setting up data
+
+url <- "https://ndownloader.figshare.com/files/22772264"
+download.file(url, destfile="data.csv", 'libcurl')
+
+data <- read.csv(file="data.csv", sep=";")
+rownames(data) <-data$form
+data$course_tot <- as.numeric(data$course_tot)
+data$gender <- as.factor(data$gender)
+data$age <- as.numeric(data$age)
+data$textbook <- as.factor(data$textbook)
+data$teacher_app <- as.factor(data$teacher_app)
+
+# raw answers for Figure 1
+lik <- data[,15:39]
+lik[lik==1] <- "Strongly agree"
+lik[lik==2] <- "Somewhat agree"
+lik[lik==3] <- "Not disagree or agree"
+lik[lik==4] <- "Somewhat disagree"
+lik[lik==5] <-"Strongly disagree"
+
+lik[]<- lapply(lik, as.factor)
+
+#Figure 1 
+
+factlevel <- c("Strongly disagree", "Somewhat disagree","Not disagree or agree", "Somewhat agree","Strongly agree")
+
+factfunc <- function(mydata, factlevel){
+  factor(mydata, 
+         levels=factlevel, 
+         ordered = TRUE)
+  fct_unify(mydata, 
+            levels=factlevel) 
+}
+
+lik_ordr <- factfunc(lik, factlevel) %>%as.data.frame()
+
+names(lik_ordr) <- c(
+  X1="Genetics is a difficult field of biology.",
+  X2="Modification of human genomes is ethically acceptable if it allows for curing genetic disorders. ",
+  X3="Genes determine all the traits in humans.",
+  X4="Genetically modified alimentary products are useful for humankind.",
+  X5="It is boring to study genetics.",
+  X6="It is impossible for me to achieve good results in learning genetics.",
+  X7="I need knowledge on genetics in my future studies.",
+  X8="If the genome of a person is known, we know exactly which diseases they will have.",
+  X9="I think I excel in genetics.",
+  X10="Stem cell research done on human embryo should be illegal.",
+  X11="Human intelligence is determined by their genes.",
+  X12="I do not need in future what I have studied in genetics course so far.",
+  X13="Usually we have interesting exercises in genetics.",
+  X14="Genetics literacy is required in everyday life.",
+  X15="Many things in genetics are difficult.",
+  X16="I like to study genetics.",
+  X17="Studying human genomes leads to parents selecting offspring who is genetically favorable.",
+  X18="I can solve even difficult genetics exercises.",
+  X19="I think knowing genetics is important.",
+  X20="The effects of genes in human happiness is marginal.",
+  X21="Genetics is one of my favorite topics in biology",
+  X22="It is acceptable that scientists develop deadlier pathogens in laboratory through genetic modification if that allows for new cures to diseases.",
+  X23="Understanding genetics is more and more important in future.",
+  X24="Some people are more succesful in school due to their genes.",
+  X25="I like biology lessons where we discuss genetics.")
+
+order <- c("Genetics is a difficult field of biology.","It is impossible for me to achieve good results in learning genetics.","I think I excel in genetics.","Many things in genetics are difficult.","I can solve even difficult genetics exercises.",
+           "It is boring to study genetics.","Usually we have interesting exercises in genetics.","I like to study genetics.","Genetics is one of my favorite topics in biology","I like biology lessons where we discuss genetics.",
+           "I need knowledge on genetics in my future studies.","I do not need in future what I have studied in genetics course so far.","Genetics literacy is required in everyday life.","I think knowing genetics is important.","Understanding genetics is more and more important in future.",
+           "Modification of human genomes is ethically acceptable if it allows for curing genetic disorders. ","Genetically modified alimentary products are useful for humankind.","Stem cell research done on human embryo should be illegal.","Studying human genomes leads to parents selecting offspring who is genetically favorable.","It is acceptable that scientists develop deadlier pathogens in laboratory through genetic modification if that allows for new cures to diseases.",
+           "Genes determine all the traits in humans.","If the genome of a person is known, we know exactly which diseases they will have.","Human intelligence is determined by their genes.","The effects of genes in human happiness is marginal.","Some people are more succesful in school due to their genes.")
+
+liklik <- likert(lik_ordr)
+
+plot(liklik, ordered=FALSE, group.order=order)
+
+## into the actual analysis
+#items that need to be reversed are 1,5,6,10,12,15,17,20!
+
+data$X1<-recode(data$X1,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
+data$X5<-recode(data$X5,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
+data$X6<-recode(data$X6,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
+data$X10<-recode(data$X10,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
+data$X12<-recode(data$X12,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
+data$X15<-recode(data$X15,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
+data$X17<-recode(data$X17,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
+data$X20<-recode(data$X20,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
+
+#descriptive statistics
+
+summary(data)
+
+
+#exploratory model 
+
+likert <- data[,15:39]
+expl5 <- mirt(likert, 5, itemtype="gpcm", method="MHRM")
+summary(expl5) #data for Table S1
+
+# describe the model. 
+#F1: liking genetics , F2: attitudes towards genetech, F3: belief in genetic determinism, F4: utility, F5: selfconcept  
+
+items <- likert[,c(1:5,7:13,15,16,18:19,21:22,25)]
+model <- mirt.model('
+                    F1 = 5,12,14,17,19
+                    F2 = 2,4,9,18
+                    F3 = 3,7,10
+                    F4 = 6,11,16
+                    F5 = 1,8,13,15
+                    COV = F1*F2*F3*F4*F5
+                      ')
+
+
+#building the model from Likert data by using 
+#counting statistics for model
+#prior values to make model work better
+model_val <- mirt.model('
+                    F1 = 5,12,14,17,19
+                    F2 = 2,4,9,18
+                    F3 = 3,7,10
+                    F4 = 6,11,16
+                    F5 = 1,8,13,15
+                      ')
+values <- mirt(items, model_val, pars = 'values', method = "MHRM", itemtype = 'gpcm')
+
+# confirmatory model
+
+mod_gpcm <- mirt(items, model, pars=values, itemtype="gpcm", method="MHRM")
+M2(mod_gpcm, type="M2*", na.rm=TRUE, QMC=TRUE) #Model fit statistics
+
+fit<-itemfit(mod_gpcm, na.rm=TRUE, QMC=TRUE)
+p.adjust(fit$p.S_X2, method = 'fdr') #Item fit statistics
+
+resid <- residuals(mod_gpcm, type = 'Q3') #Q3 statisticss
+sum(resid>0.2) 
+
+mod_gpcmt <- mirt(na.omit(likert), model, itemtype="gpcm", method="MHRM")
+Theta <- fscores(mod_gpcmt, method = 'MAP', QMC=TRUE)
+
+persfit <- personfit(mod_gpcmt, Theta=Theta, method ='MAP', QMC=TRUE) #Person-fit statistics
+misfits <- subset(persfit, Zh< -2)
+
+likert2 <- likert[-as.numeric(rownames(misfits)),] #Removal of misfit rows
+ 
+# going to latent thingies- 1st scale age, course_tot
+
+data2 <- data[-as.numeric(rownames(misfits)),]
+cov <- data2[,c(2,10:14)]
+cov$school <- as.numeric(cov$school)
+cov$age <- scale(cov$age)
+cov$course_tot <- scale(cov$course_tot)
+cov <- data.frame(cov)
+
+#Run explanatory model
+
+
+bdmod<- mixedmirt(likert2, cov, model, itemtype="gpcm", 
+                  fixed = ~0, lr.random = ~ 1|school,
+                  lr.fixed = ~ gender + course_tot + textbook + teacher_app,
+                  technical = list(removeEmptyRows = TRUE))
+
+
+coef(bdmod)
+
+#Figure 2 - dot and whisker plot
+
+coef <- coef(bdmod)$lr.betas
+coef <- t(coef)
+comb <- rownames(coef)
+
+comb <- recode(comb, F1_teacher_app2 = "F1_teacherapp2", F2_teacher_app2 = "F2_teacherapp2", F3_teacher_app2 = "F3_teacherapp2", F4_teacher_app2 = "F4_teacherapp2", F5_teacher_app2 = "F5_teacherapp2",
+       F1_teacher_app3 = "F1_teacherapp3", F2_teacher_app3 = "F2_teacherapp3", F3_teacher_app3 = "F3_teacherapp3", F4_teacher_app3 = "F4_teacherapp3", F5_teacher_app3 = "F5_teacherapp3")
+
+modl <- strsplit(comb,"_")
+model <- (sapply(modl, "[",1))
+submodel <- sapply(modl, "[",2)
+term <- recode(submodel, teacherapp2 = "teacherapp",  teacherapp3 = "teacherapp")
+
+coef <- cbind(coef, model, submodel,term)
+coef <- coef[c(2:6,8:12,14:18,20:24,26:30),]
+
+work <- as_tibble(coef)
+
+work <- work %>% 
+  rename(
+    estimate = par
+  )
+
+work <- work %>% 
+  mutate_at(vars(estimate, CI_2.5, CI_97.5), as.numeric)
+
+
+ggplot(work, aes(x = estimate, xmin = CI_2.5, xmax = CI_97.5, y = as.factor(term), colour = submodel))+
+  geom_point()+
+  geom_errorbar(width=0.1)+
+  theme_bw()+
+  facet_grid(cols=vars(model))
