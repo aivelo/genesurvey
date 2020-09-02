@@ -98,11 +98,10 @@ data$X20<-recode(data$X20,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
 #descriptive statistics
 
 summary(data)
-
+likert <- data[,15:39]
 
 #exploratory model 
 
-likert <- data[,15:39]
 expl5 <- mirt(likert, 5, itemtype="gpcm", method="MHRM")
 summary(expl5) #data for Table S1
 
@@ -143,6 +142,9 @@ p.adjust(fit$p.S_X2, method = 'fdr') #Item fit statistics
 resid <- residuals(mod_gpcm, type = 'Q3') #Q3 statisticss
 sum(resid>0.2) 
 
+theta_se <- fscores(mod_gpcm, full.scores=TRUE, full.scores.SE=TRUE,QMC=TRUE)
+empirical_rxx(theta_se) # empirical reliability of the factors
+
 mod_gpcmt <- mirt(na.omit(likert), model, itemtype="gpcm", method="MHRM")
 Theta <- fscores(mod_gpcmt, method = 'MAP', QMC=TRUE)
 
@@ -170,6 +172,7 @@ bdmod<- mixedmirt(likert2, cov, model, itemtype="gpcm",
 
 
 coef(bdmod)
+residuals(bdmod, type="JSI")
 
 #Figure 2 - dot and whisker plot
 
