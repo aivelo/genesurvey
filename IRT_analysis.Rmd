@@ -1,7 +1,14 @@
+---
+title: "IRT_analysis"
+author: "Tuomas Aivelo"
+date: "22 5 2020"
+output: html_document
+---
+This is a commented R script for the analysis for the manuscript "Factors explaining students’ attitudes towards learning in genetics and belief in genetic determinism" by Tuomas Aivelo and Anna Uitto
 
-```{r }
-#necessary packages
+First we install all the needed packages:
 
+```{r}
 deps = c("car","mirt","likert","dplyr","forcats","dotwhisker","tidyr","tidyverse", "rfigshare");
 
 for (dep in deps){
@@ -11,8 +18,11 @@ for (dep in deps){
   library(dep, verbose=FALSE, character.only=TRUE)
 }
 
-#setting up data
+```
 
+The data is downloaded from the Figshare repository and processed to the needed format
+
+```{r}
 url <- "https://ndownloader.figshare.com/files/22772264"
 download.file(url, destfile="data.csv", 'libcurl')
 
@@ -23,6 +33,12 @@ data$gender <- as.factor(data$gender)
 data$age <- as.numeric(data$age)
 data$textbook <- as.factor(data$textbook)
 data$teacher_app <- as.factor(data$teacher_app)
+
+```
+
+First we format the data so we can do Figure 1. We take the subset of Likert scale answers for items 1 to 25 and their statements. These are inputs to the Figure made with likert package.
+
+```{r}
 
 # raw answers for Figure 1
 lik <- data[,15:39]
@@ -85,8 +101,11 @@ liklik <- likert(lik_ordr)
 
 plot(liklik, ordered=FALSE, group.order=order)
 
-## into the actual analysis
-#items that need to be reversed are 1,5,6,10,12,15,17,20!
+```
+
+Then we go to the actual analysis. First we need to reverse items 1,5,6,10,12,15,17 and 20.
+
+```{r}
 
 data$X1<-recode(data$X1,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
 data$X5<-recode(data$X5,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
@@ -97,18 +116,28 @@ data$X15<-recode(data$X15,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
 data$X17<-recode(data$X17,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
 data$X20<-recode(data$X20,'1'=5L,'2'=4L,'4'=2L,'5'=1L)
 
-#descriptive statistics
+```
 
+Then we look at the descriptive statistics. 
+
+```{r}
 summary(data)
+
+```
+
+Exploratory analysis uses all of the times and every respondent.Summary is the output which is given in Table S1 of the manuscript. 
+
+```{r}
+
 likert <- data[,15:39]
-
-#exploratory model 
-
 expl5 <- mirt(likert, 5, itemtype="gpcm", method="MHRM")
-summary(expl5) #data for Table S1
+summary(expl5) 
+```
 
-# describe the model. 
-#F1: liking genetics , F2: attitudes towards genetech, F3: belief in genetic determinism, F4: utility, F5: selfconcept  
+Then we define the model for the confirmatory analysis based on our items. We remove poorly performing items based on the previous step. Used dimesions are F1: liking genetics, F2: attitudes towards gene technology, F3: belief in genetic determinism, F4: perceived utility of genetics, F5: selfconcept in genetics
+
+```{r}
+
 
 items <- likert[,c(1:5,7:13,15,16,18:19,21:22,25)]
 model <- mirt.model('
@@ -121,9 +150,10 @@ model <- mirt.model('
                       ')
 
 
-#building the model from Likert data by using 
-#counting statistics for model
-#prior values to make model work better
+```
+
+We also define a model to calculate the priors for the model run to facilitate in reaching the sensible model. 
+```{r}
 model_val <- mirt.model('
                     F1 = 5,12,14,17,19
                     F2 = 2,4,9,18
@@ -132,16 +162,19 @@ model_val <- mirt.model('
                     F5 = 1,8,13,15
                       ')
 values <- mirt(items, model_val, pars = 'values', method = "MHRM", itemtype = 'gpcm')
+```
 
-# confirmatory model
+Then we run the confirmatory model. This gives us the model fit statistics, item fit statistics, Q3 statistics, person-fit statistics. Based on the person-fit, we remove part of the respondents as outliers.
+
+```{r}
 
 mod_gpcm <- mirt(items, model, pars=values, itemtype="gpcm", method="MHRM")
-M2(mod_gpcm, type="M2*", na.rm=TRUE, QMC=TRUE) #Model fit statistics
+M2(mod_gpcm, type="M2*", na.rm=TRUE, QMC=TRUE) 
 
 fit<-itemfit(mod_gpcm, na.rm=TRUE, QMC=TRUE)
-p.adjust(fit$p.S_X2, method = 'fdr') #Item fit statistics
+p.adjust(fit$p.S_X2, method = 'fdr')
 
-resid <- residuals(mod_gpcm, type = 'Q3') #Q3 statisticss
+resid <- residuals(mod_gpcm, type = 'Q3')
 sum(resid>0.2) 
 
 theta_se <- fscores(mod_gpcm, full.scores=TRUE, full.scores.SE=TRUE,QMC=TRUE)
@@ -150,12 +183,15 @@ empirical_rxx(theta_se) # empirical reliability of the factors
 mod_gpcmt <- mirt(na.omit(likert), model, itemtype="gpcm", method="MHRM")
 Theta <- fscores(mod_gpcmt, method = 'MAP', QMC=TRUE)
 
-persfit <- personfit(mod_gpcmt, Theta=Theta, method ='MAP', QMC=TRUE) #Person-fit statistics
+persfit <- personfit(mod_gpcmt, Theta=Theta, method ='MAP', QMC=TRUE)
 misfits <- subset(persfit, Zh< -2)
 
-likert2 <- likert[-as.numeric(rownames(misfits)),] #Removal of misfit rows
- 
-# going to latent thingies- 1st scale age, course_tot
+likert2 <- likert[-as.numeric(rownames(misfits)),]
+```
+
+We refine the data for the explanatory model, including scaling of the variables
+
+```{r}
 
 data2 <- data[-as.numeric(rownames(misfits)),]
 cov <- data2[,c(2,10:14)]
@@ -164,9 +200,11 @@ cov$age <- scale(cov$age)
 cov$course_tot <- scale(cov$course_tot)
 cov <- data.frame(cov)
 
-#Run explanatory model
+```
 
+Then we run the confirmatory model. Coefficients are used for the Table 2 of the manuscript on the correlations between factors.
 
+```{r}
 bdmod<- mixedmirt(likert2, cov, model, itemtype="gpcm", 
                   fixed = ~0, lr.random = ~ 1|school,
                   lr.fixed = ~ gender + course_tot + textbook + teacher_app,
@@ -175,9 +213,11 @@ bdmod<- mixedmirt(likert2, cov, model, itemtype="gpcm",
 
 coef(bdmod)
 residuals(bdmod, type="JSI")
+```
 
-#Figure 2 - dot and whisker plot
+Finally, we use the coefficients of the model to produce Figure 2 of the manuscript.
 
+```{r}
 coef <- coef(bdmod)$lr.betas
 coef <- t(coef)
 comb <- rownames(coef)
@@ -210,11 +250,3 @@ ggplot(work, aes(x = estimate, xmin = CI_2.5, xmax = CI_97.5, y = as.factor(term
   theme_bw()+
   facet_grid(cols=vars(model))
 ```
-
-
----
-title: "irt_analysis.R"
-author: "OMISTAJA"
-date: "2020-09-02"
----
-
